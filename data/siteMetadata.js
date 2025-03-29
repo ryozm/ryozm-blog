@@ -4,7 +4,7 @@ const siteMetadata = {
   author: 'Ryozm',
   headerTitle: 'RyozmBlog',
   description: '',
-  language: 'zh-cn',
+  language: 'en-us',
   theme: 'system', // system, dark or light
   siteUrl: 'https://ryozm-blog.vercel.app',
   siteRepo: 'https://github.com/ryozm/ryozm-blog',
@@ -22,7 +22,7 @@ const siteMetadata = {
   // instagram: 'https://www.instagram.com',
   // medium: 'https://medium.com',
   // bluesky: 'https://bsky.app/',
-  locale: 'zh-CN',
+  locale: 'en-US',
   // set to true if you want a navbar fixed to the top
   stickyNav: false,
   analytics: {
