@@ -1,0 +1,187 @@
+---
+title: 手写Promise常用方法(all、race、any、allSettled)
+date: '2025-04-07'
+tags: ['js', 'promise']
+draft: true
+---
+
+在JavaScript的异步编程中，Promise是一个非常强大的工具。虽然我们日常开发中直接使用内置的Promise方法就够了，但是理解这些方法的内部实现原理对于加深对Promise的理解非常有帮助。本文将手把手带你实现Promise的四个常用静态方法：`all`、`race`、`any`和`allSettled`。
+
+这些方法看似简单，但每一个都有其独特的行为和边界情况处理。通过手写实现，你会对它们的工作原理有更深入的理解，也能在面试中展示你对JavaScript异步编程的掌握程度。
+
+## Promise.all
+
+`Promise.all`可能是使用频率最高的Promise静态方法了。它接收一个Promise数组（准确地说是一个可迭代对象），并返回一个新的Promise，这个新Promise在所有输入的Promise都成功时才会成功，一旦有任何一个Promise失败，它就会立即失败。
+
+在实际开发中，当我们需要并行执行多个异步操作并等待它们全部完成时，`Promise.all`就派上用场了。比如同时发起多个API请求，然后等所有数据都返回后再进行处理。
+
+下面是手写实现：
+
+```js
+function myPromiseAll(promises) {
+  return new Promise((resolve, reject) => {
+    if (!Array.isArray(promises)) {
+      return reject(new TypeError('Argument must be an array'));
+    }
+
+    const result = [];
+    let resolvedCount = 0;
+
+    if (promises.length === 0) {
+      return resolve([]); // 空数组直接返回空数组
+    }
+
+    promises.forEach((p, index) => {
+      // 保证无论是值还是Promise，都统一处理
+      Promise.resolve(p)
+        .then((value) => {
+          result[index] = value; // 保证结果顺序与输入顺序一致
+          resolvedCount++;
+          if (resolvedCount === promises.length) {
+            resolve(result);
+          }
+        })
+        .catch((err) => {
+          reject(err); // 有一个失败就立即失败
+        });
+    });
+  });
+}
+```
+
+实现要点：
+1. 返回一个新的Promise
+2. 使用数组保存每个Promise的结果，并确保结果顺序与输入顺序一致
+3. 计数器跟踪已完成的Promise数量
+4. 任何一个Promise失败都会导致整个操作失败
+
+## Promise.race
+
+与`Promise.all`不同，`Promise.race`是一场"竞赛"，只要有一个Promise率先改变状态（无论是成功还是失败），`race`就会采用那个Promise的状态和结果。
+
+这在设置超时、获取最快的数据源等场景中非常有用。例如，你可以将一个正常的API请求和一个超时Promise放在一起race，实现请求超时控制。
+
+```js
+function myPromiseRace(promises) {
+  return new Promise((resolve, reject) => {
+    if (!Array.isArray(promises)) {
+      return reject(new TypeError('Argument must be an array'));
+    }
+
+    // 空数组的情况下，race会永远处于pending状态
+    for (let p of promises) {
+      Promise.resolve(p)
+        .then(resolve)  // 谁最先完成，就采用谁的状态
+        .catch(reject);
+    }
+  });
+}
+```
+
+实现要点：
+1. 遍历所有Promise，将它们的结果直接传给外层Promise的resolve或reject
+2. 由于JavaScript的事件循环机制，最先完成的Promise会最先触发回调
+3. 一旦有一个Promise状态改变，结果就确定了，后面完成的Promise结果会被忽略
+
+## Promise.any
+
+`Promise.any`是ES2021引入的新方法，它与`race`类似，但只关注成功的情况。只要有一个Promise成功，它就会成功；只有当所有Promise都失败时，它才会失败，并返回一个`AggregateError`包含所有失败原因。
+
+这个方法在你有多个数据源，只要获取到一个有效结果就能继续的场景中很有用。
+
+```js
+function myPromiseAny(promises) {
+  return new Promise((resolve, reject) => {
+    if (!Array.isArray(promises)) {
+      return reject(new TypeError('Argument must be an array'));
+    }
+
+    let errors = [];
+    let rejectedCount = 0;
+
+    if (promises.length === 0) {
+      // 与规范一致，空数组立即抛出AggregateError
+      return reject(new AggregateError([], 'All promises were rejected'));
+    }
+
+    promises.forEach((p, index) => {
+      Promise.resolve(p)
+        .then(resolve) // 任何一个成功就立即成功
+        .catch((err) => {
+          errors[index] = err;
+          rejectedCount++;
+          if (rejectedCount === promises.length) {
+            // 所有Promise都失败时，收集所有错误
+            reject(new AggregateError(errors, 'All promises were rejected'));
+          }
+        });
+    });
+  });
+}
+```
+
+实现要点：
+1. 收集所有失败的原因
+2. 只要有一个成功就立即成功
+3. 只有当所有Promise都失败时才失败，并返回所有错误信息
+
+## Promise.allSettled
+
+`Promise.allSettled`是ES2020引入的方法，它不关心Promise的成功或失败，只关心所有Promise都已经完成（settled）。它返回一个数组，包含每个Promise的状态和结果。
+
+这个方法在你需要执行多个独立的异步操作，并且不希望某一个操作的失败影响其他操作时非常有用。
+
+```js
+function myPromiseAllSettled(promises) {
+  return new Promise((resolve, reject) => {
+    if (!Array.isArray(promises)) {
+      return reject(new TypeError('Argument must be an array'));
+    }
+
+    const result = [];
+    let completedCount = 0;
+
+    if (promises.length === 0) {
+      return resolve([]);
+    }
+
+    promises.forEach((p, index) => {
+      Promise.resolve(p)
+        .then((value) => {
+          result[index] = {
+            status: 'fulfilled',
+            value: value,
+          };
+        })
+        .catch((reason) => {
+          result[index] = {
+            status: 'rejected',
+            reason: reason,
+          };
+        })
+        .finally(() => {
+          completedCount++;
+          if (completedCount === promises.length) {
+            resolve(result);
+          }
+        });
+    });
+  });
+}
+```
+
+实现要点：
+1. 无论Promise成功还是失败，都记录其状态和结果/原因
+2. 使用`finally`确保无论成功失败都会增加计数器
+3. 当所有Promise都完成时，返回包含所有结果的数组
+
+## 总结
+
+通过手写这四个Promise静态方法，我们可以更深入地理解它们的工作原理和使用场景：
+
+- `Promise.all`: 全部成功才成功，一个失败就失败
+- `Promise.race`: 采用第一个改变状态的Promise的状态
+- `Promise.any`: 一个成功就成功，全部失败才失败
+- `Promise.allSettled`: 等待所有Promise完成，不关心成功失败
+
+在实际开发中，根据不同的业务需求选择合适的方法可以让我们的异步代码更加健壮和优雅。
